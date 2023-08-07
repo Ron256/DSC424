@@ -1,0 +1,106 @@
+---
+title: "Micedatasetexample"
+author: "Ronaldlee Ejalu"
+date: "2/17/2021"
+output: html_document
+---
+
+#load the necessary packages
+```{r}
+library(RCurl, quietly = TRUE)
+library(mice, quietly = TRUE)
+```
+
+# set working directory
+```{r}
+setwd("C:/Users/rejalu1/OneDrive - Henry Ford Health System/DSC424/HomeWork3")
+```
+
+
+#make a copy of the nhanes dataset
+```{r}
+df_nhanes <- nhanes
+```
+
+
+#Check data for missing values
+```{r}
+sapply(df_nhanes
+       , function(x) sum(is.na(x))
+       )
+```
+
+```{r}
+str(nhanes)
+```
+
+#transform variables into numeric or or factors 
+#depending on the data type
+```{r}
+library(dplyr)
+df_nhanes <- df_nhanes %>%
+  mutate(age = as.factor(age)
+         , bmi = as.numeric(bmi)
+         , hyp = as.numeric(hyp)
+         , chl = as.numeric(chl)
+  )
+```
+
+#it is now time to impute the data.
+```{r}
+library(mice, quietly = TRUE)
+init=mice(df_nhanes, maxit = 0)
+meth=init$method
+predM=init$predictorMatrix
+```
+#To impute the missing values, mice package use an algorithm in a #such a way that use information from other variables in the dataset #to predict and impute the missing values. Therefore, you may not #want to use a certain variable as predictors. For example, the ID #variable does not have any predictive value.
+
+#The code below will remove the variable as a predictor but still #will be imputed. Just for illustration purposes, I select the BMI #variable to not be included as predictor during imputation
+```{r}
+#predM[, c("age")] = 0
+predM[, c("bmi")] = 0
+```
+
+#Now let specify the methods for imputing the missing values. There #are specific methods for continous, binary and ordinal variables. I #set different methods for each variable. You can add more than one #variable in each method.
+```{r}
+meth[c("hyp")] = "norm"
+meth[c("chl")] = "norm"
+meth[c("bmi")] = "norm"
+```
+
+#Now it is time to run the multiple (m=5) imputation.
+```{r}
+set.seed(103)
+imputed=mice(df_nhanes
+             , method=meth
+             , predictorMatrix=predM
+             , m=5
+)
+```
+#Create a dataset after imputation.
+```{r}
+imputed <- mice::complete(imputed)
+```
+#Check for missing values in the imputed dataset
+```{r}
+sapply(imputed
+       , function(x) sum(is.na(x))
+       )
+```
+
+#############Checking for accuracy#############
+```{r}
+#chl
+#actual <- nhanes$chl[is.na(df_nhanes$chl)]
+#predicted <- imputed$chl[is.na(df_nhanes$chl)]
+
+#hyp
+actual <- nhanes$hyp[is.na(df_nhanes$hyp)]
+predicted <- imputed$hyp[is.na(df_nhanes$hyp)]
+
+#table(actual)
+#table(predicted)
+
+#mean(actual)
+mean(predicted)
+```

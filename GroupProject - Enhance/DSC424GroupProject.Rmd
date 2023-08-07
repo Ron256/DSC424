@@ -1,0 +1,1057 @@
+---
+title: "DSC424_Project"
+author: "Kate Burns, Abigail Keller, Ronaldlee Ejalu"
+date: "3/5/2021"
+output: pdf_document
+---
+
+#Libraries
+```{r}
+library(PCAmixdata)
+library(foreign)  # Allows us to read spss files!
+library(corrplot)
+library(QuantPsyc)
+library(leaps)
+library(RColorBrewer)
+library(DescTools)
+library(Hmisc) #Describe Function
+library(psych) #Multiple Functions for Statistics and Multivariate Analysis
+library(GGally) #ggpairs Function
+library(ggplot2) #ggplot2 Functions
+library(vioplot) #Violin Plot Function
+library(corrplot) #Plot Correlations
+library(REdaS) #Bartlett's Test of Sphericity
+library(psych) #PCA/FA functions
+library(factoextra) #PCA Visualizations
+library("FactoMineR") #PCA functions
+library(ade4) #PCA Visualizations
+##############################################################################################
+```
+
+
+```{r}
+# Set the working directory
+setwd("~/Documents/DePaul MS DS/DePaul Winter 2021/DSC 424/Project_424")
+nhanes <- read.csv(file="nhanesCompletedv4.csv", header=TRUE, sep=",")
+#setwd("C:/Users/rejalu1/OneDrive - Henry Ford Health System/DSC424/HomeWork4")
+#nhanes <- read.csv(file="../HomeWork4/datasets/nhanesCompletedv4.csv", header=TRUE, sep=",")
+sum(is.na(nhanes))
+```
+
+############################################################################################
+Principal Component Analysis
+###########################################################################################
+
+#Check for Multicollinearity with Correlations
+```{r}
+training = nhanes[, -c(1)]
+M<-cor(training, method="spearman")
+M
+corrplot(cor(training,method="spearman"), method = "number", type = "lower")
+#GGplot Correlation
+ggcorr(training, method = c("pairwise","spearman"), label=TRUE)
+ggcorr(training, method = c("pairwise","spearman"))
+```
+
+#run original PCA method with all numeric variables
+```{r}
+#removed most categorical and highly correlated variables (left some binary) 
+training = nhanes[, c(5,6,8,9,12,13,15,16,21:24,28,29,30,32:34,36,37)]
+
+cor(training, use = 'pairwise.complete.obs')
+# Compute the correlation matrix and visualize it
+cor.nhanes = cor(training)
+cor.nhanes
+corrplot(cor.nhanes, method="number")
+```
+
+#Jarque-Bera test (>3,000 Sample Size) for all numerical attributes
+```{r}
+JarqueBeraTest(training$hospital_stays)
+JarqueBeraTest(training$time_walking_biking_perday)
+JarqueBeraTest(training$moderate_activity)
+JarqueBeraTest(training$frozen_meals)
+JarqueBeraTest(training$bp_age)
+JarqueBeraTest(training$height)
+JarqueBeraTest(training$weight)
+JarqueBeraTest(training$sleep_weekdays)
+JarqueBeraTest(training$hours_worked)
+JarqueBeraTest(training$time_outdoors_weekdays)
+JarqueBeraTest(training$time_outdoors_weekends)
+JarqueBeraTest(training$sunburn)
+JarqueBeraTest(training$vigorous_activity)
+JarqueBeraTest(training$vigorous_activity_atwork)
+JarqueBeraTest(training$time_sitting)
+JarqueBeraTest(training$take_away_food)
+JarqueBeraTest(training$gender)
+JarqueBeraTest(training$age)
+JarqueBeraTest(training$ethnicity)
+```
+
+```{r}
+# PCA_Plot functions - backend code
+
+PCA_Plot = function(pcaData)
+{
+  library(ggplot2)
+  
+  theta = seq(0,2*pi,length.out = 100)
+  circle = data.frame(x = cos(theta), y = sin(theta))
+  p = ggplot(circle,aes(x,y)) + geom_path()
+  
+  loadings = data.frame(pcaData$rotation, .names = row.names(pcaData$rotation))
+  p + geom_text(data=loadings, mapping=aes(x = PC1, y = PC2, label = .names, colour = .names, fontface="bold")) +
+    coord_fixed(ratio=1) + labs(x = "PC1", y = "PC2")
+}
+
+PCA_Plot_Secondary = function(pcaData)
+{
+  library(ggplot2)
+  
+  theta = seq(0,2*pi,length.out = 100)
+  circle = data.frame(x = cos(theta), y = sin(theta))
+  p = ggplot(circle,aes(x,y)) + geom_path()
+  
+  loadings = data.frame(pcaData$rotation, .names = row.names(pcaData$rotation))
+  p + geom_text(data=loadings, mapping=aes(x = PC3, y = PC4, label = .names, colour = .names, fontface="bold")) +
+    coord_fixed(ratio=1) + labs(x = "PC3", y = "PC4")
+}
+
+PCA_Plot_Psyc = function(pcaData)
+{
+  library(ggplot2)
+  
+  theta = seq(0,2*pi,length.out = 100)
+  circle = data.frame(x = cos(theta), y = sin(theta))
+  p = ggplot(circle,aes(x,y)) + geom_path()
+  
+  loadings = as.data.frame(unclass(pcaData$loadings))
+  s = rep(0, ncol(loadings))
+  for (i in 1:ncol(loadings))
+  {
+    s[i] = 0
+    for (j in 1:nrow(loadings))
+      s[i] = s[i] + loadings[j, i]^2
+    s[i] = sqrt(s[i])
+  }
+  
+  for (i in 1:ncol(loadings))
+    loadings[, i] = loadings[, i] / s[i]
+  
+  loadings$.names = row.names(loadings)
+  
+  p + geom_text(data=loadings, mapping=aes(x = PC1, y = PC2, label = .names, colour = .names, fontface="bold")) +
+    coord_fixed(ratio=1) + labs(x = "PC1", y = "PC2")
+}
+
+PCA_Plot_Psyc_Secondary = function(pcaData)
+{
+  library(ggplot2)
+  
+  theta = seq(0,2*pi,length.out = 100)
+  circle = data.frame(x = cos(theta), y = sin(theta))
+  p = ggplot(circle,aes(x,y)) + geom_path()
+  
+  loadings = as.data.frame(unclass(pcaData$loadings))
+  s = rep(0, ncol(loadings))
+  for (i in 1:ncol(loadings))
+  {
+    s[i] = 0
+    for (j in 1:nrow(loadings))
+      s[i] = s[i] + loadings[j, i]^2
+    s[i] = sqrt(s[i])
+  }
+  
+  for (i in 1:ncol(loadings))
+    loadings[, i] = loadings[, i] / s[i]
+  
+  loadings$.names = row.names(loadings)
+  
+  print(loadings)
+  p + geom_text(data=loadings, mapping=aes(x = PC3, y = PC4, label = .names, colour = .names, fontface="bold")) +
+    coord_fixed(ratio=1) + labs(x = "PC3", y = "PC4")
+}
+
+```
+
+```{r}
+#Test KMO Sampling Adequacy
+library(psych)
+KMO(training)
+
+#Test Bartlett's Test of Sphericity
+library(REdaS)
+bart_spher(training)
+
+
+#Test for Reliability Analysis using Cronbach's Alpha
+library(psych)
+alpha(training, check.keys = TRUE)
+```
+
+
+```{r}
+#Create PCA, scaling the data, gives rotation matrrix
+p = prcomp(training, center=T, scale=T)
+#p = prcomp(responses2)
+p
+
+#Check Scree Plot
+plot(p)
+abline(1, 0)
+
+#Check PCA Summary Information, info of standard deviations and breakdown of varaibles 
+summary(p)
+print(p)
+```
+
+#components when using standard PCA method (not final)
+```{r}
+p2 = psych::principal(training, rotate="varimax", nfactors=4, scores=TRUE)
+p2
+print(p2$loadings, cutoff=.3, sort=T)
+```
+
+
+Mixed PCA
+###########################################################################################
+```{r}
+
+training = nhanes[, -c(1,25,26)] # remove correlated variables
+training$chest_pain = factor(training$chest_pain)
+training$chest_pain_walk_fast = factor(training$chest_pain_walk_fast)
+training$chest_pain_normal_pace = factor(training$chest_pain_normal_pace)
+training$overweight = factor(training$overweight)
+training$hypertension = factor(training$hypertension)
+training$gluten_free = factor(training$gluten_free)
+training$stroke = factor(training$stroke)
+training$diabetes_relatives = factor(training$diabetes_relatives)
+training$last_doctor_visit = factor(training$last_doctor_visit)
+training$diabetes = factor(training$diabetes)
+training$diabetes_risk = factor(training$diabetes_risk)
+training$feel_at_risk_diabetes = factor(training$feel_at_risk_diabetes)
+training$smoking = factor(training$smoking)
+training$gender = factor(training$gender)
+training$ethnicity = factor(training$ethnicity)
+training$education_level = factor(training$education_level)
+training$annual_income = factor(training$annual_income)
+training$bc_checked = factor(training$bc_checked)
+```
+
+#loadings and graphical representations
+```{r}
+split <- splitmix(training)
+X1 <- split$X.quanti 
+X2 <- split$X.quali 
+res.pcamix <- PCAmix(X.quanti=X1, X.quali=X2,rename.level=TRUE,
+                     graph=FALSE)
+
+res.pcamix
+res.pcamix$eig
+?plot.PCAmix
+par(mfrow=c(2,2))
+plot(res.pcamix,choice="ind",coloring.ind=X2$diabetes_risk,label=FALSE,
+     posleg="bottomright", main="Observations")
+plot(res.pcamix,choice="levels",xlim=c(-1.5,2.5), main="Levels")
+plot(res.pcamix,choice="cor",main="Numerical variables")
+plot(res.pcamix,choice="sqload",coloring.var=T, leg=TRUE,
+     posleg="topright", main="All variables")
+```
+
+#training/test samples
+```{r}
+set.seed(10)
+test <- sample(1:nrow(training),2700)
+train.pcamix <- PCAmix(X1[-test,],X2[-test,],ndim=25,graph=FALSE,rename.level=TRUE)
+pred <- predict(train.pcamix,X1[test,],X2[test,])
+head(pred)
+
+par(mfrow=c(1,1))
+plot(train.pcamix,axes=c(1,2),label=FALSE,main="Observations map")
+points(pred,col=2,pch=16)
+legend("bottomright",legend = c("train","test"),fill=1:2,col=1:2)
+```
+
+
+```{r}
+data(training)
+#Create the datatable
+train <- training
+#Split the datatable
+split <- splitmix(train)
+X1 <- split$X.quanti 
+X2 <- split$X.quali 
+res.pcamix <- PCAmix(X.quanti=X1, X.quali=X2,ndim=25, rename.level=TRUE,
+                     graph=FALSE)
+#In order to choose the number of dimension to rotate, we look at the inertia of the principal components
+res.pcamix$eig 
+res.pcarot <- PCArot(res.pcamix,dim=5,graph=FALSE)
+res.pcarot$eig #variance of the rotated PCs
+#before rotation
+round(res.pcamix$sqload,digit=2)
+res.pcarot$quali
+#after rotation
+round(res.pcarot$sqload,digit=2)
+#remove variables with low loading values
+round(res.pcarot$sqload[-c(1,4,8,9,12,15,16,18,20,23,24,26),1:5],digit=2)
+```
+
+
+
+############################################################################################
+Logistic Regression Analysis
+###########################################################################################
+#exploratory analysis
+```{r}
+
+nhanes
+dim(nhanes)
+## 8,957 records, 37 variables
+ 
+head(nhanes)
+names(nhanes)
+ 
+#check missing values
+sum(is.na(nhanes))
+#0 total missing values
+ 
+# create new field for BMI
+nhanes$BMI = (nhanes$height / nhanes$weight)
+ 
+#Create new subsets of data
+ 
+disease_risk <- nhanes[,19:32]
+weight_activity_diet <- nhanes[c(1:18,38)]
+demographics <- nhanes[,33:37]
+ 
+dM<-cor(disease_risk, method="spearman")
+round(dM,2)
+corrplot(cor(dM,method="spearman"), method = "number", type = "lower")
+ 
+wM<-cor(weight_activity_diet, method="spearman")
+round(wM,2)
+corrplot(cor(wM,method="spearman"), method = "number", type = "lower")
+ 
+## most weighed is 0.93 highly correlated to weight
+## weighed 10 years ago is 0.83 highly correlated to weight
+## weight is highly correlated to BMI
+## remove most weighed, weighed 10 years ago and weight
+ 
+demoM<-cor(demographics, method="spearman")
+round(demoM,2)
+corrplot(cor(demoM,method="spearman"), method = "number", type = "lower")
+ 
+nhanesCompletedv3 <- nhanes[c(1:5, 10:38)]
+ 
+## double check correlation
+totalM<-cor(nhanesCompletedv3, method="spearman")
+round(totalM,2)
+## correlations all seem moderate now
+ 
+```
+ 
+#make a copy of the enhanced data set
+```{r}
+#df_nhanesdataset <- nhanesCompletedv3
+df_nhanesdataset <- nhanes
+str(df_nhanesdataset)
+sum(is.na(df_nhanesdataset))
+```
+
+#Load the necessary packages
+```{r}
+install.packages("dplyr")
+install.packages("mosaic")
+install.packages("lubridate")
+install.packages("ggplot2")
+ 
+library(dplyr)
+library(mosaic)
+library(lubridate)
+library(ggplot2)
+```
+
+# data cleaning
+```{r}
+library(dplyr)
+nhanescleansed <- df_nhanesdataset %>%
+  transmute(diabetes_risk = as.factor(diabetes_risk)
+            , sunburn = as.factor(sunburn)
+            , annual_income = as.factor(annual_income)
+            , bp_age = scale(bp_age)
+            , bc_checked = as.factor(bc_checked)
+            , smoking = as.factor(smoking)
+            , hospital_stays = scale(hospital_stays)
+            , last_doctor_visit = scale(last_doctor_visit)
+            , time_walking_biking_perday = scale(time_walking_biking_perday)
+            , moderate_activity = scale(moderate_activity)
+            , chest_pain = as.factor(chest_pain)
+            , chest_pain_walk_fast = as.factor(chest_pain_walk_fast)
+            , chest_pain_normal_pace = as.factor(chest_pain_normal_pace)
+            , overweight = as.factor(overweight)
+            , hypertension = as.factor(hypertension)
+            , gluten_free = as.factor(gluten_free)
+            , stroke = as.factor(stroke)
+            , diabetes_relatives = as.factor(diabetes_relatives)
+            , diabetes = as.factor(diabetes)
+            , feel_at_risk_diabetes = as.factor(feel_at_risk_diabetes)
+            , ethnicity = as.factor(ethnicity)
+            , education_level = as.factor(education_level)
+            , moderate_activity = scale(moderate_activity)
+            , frozen_meals = scale(frozen_meals)
+            , age = scale(age)
+            , sleep_weekdays = scale(sleep_weekdays)
+            , hours_worked = scale(hours_worked)
+            , time_outdoors_weekdays = scale(time_outdoors_weekdays)
+            , time_outdoors_weekends = scale(time_outdoors_weekends)
+            , time_sitting = scale(time_sitting)
+            , take_away_food = scale(take_away_food)
+            , gender = as.factor(gender)
+            , vigorous_activity_atwork = scale(vigorous_activity_atwork)
+            , vigorous_activity = scale(vigorous_activity)
+            , BMI = scale(BMI)
+  ) %>%
+ 
+  mutate(diabetes_risk = relevel(diabetes_risk, ref = '0')
+         , annual_income = relevel(annual_income, ref = '15')
+         , sunburn = relevel(sunburn, ref = '2')
+         , bc_checked = relevel(bc_checked, ref = '4')
+         , smoking = relevel(smoking, ref = '2')
+         , overweight = relevel(overweight, ref = '0')
+         , chest_pain_normal_pace = relevel(chest_pain_normal_pace, ref = '0')
+         , chest_pain = relevel(chest_pain, ref = '0')
+         , chest_pain_walk_fast = relevel(chest_pain_walk_fast, ref = '0')
+         , hypertension = relevel(hypertension, ref = '0')
+         , gluten_free = relevel(gluten_free, ref = '0')
+         , stroke = relevel(stroke, ref = '0')
+         , diabetes_relatives = relevel(diabetes_relatives, ref = '0')
+         , diabetes = relevel(diabetes, ref = '0')
+         , feel_at_risk_diabetes = relevel(feel_at_risk_diabetes, ref = '0')
+         , gender = relevel(gender, ref = '1')
+         , ethnicity = relevel(ethnicity, ref = '3')
+         , education_level = relevel(education_level, ref = '5')
+  )
+ 
+#create a matrix for annual income
+incomedummies.matrx <- model.matrix(~nhanescleansed$annual_income)
+ 
+#Convert the model matrix into a data frame
+incomedummies.frame <- data.frame(incomedummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, incomedummies.frame)
+ 
+#create a matrix for sunburn
+sunburndummies.matrx <- model.matrix(~nhanescleansed$sunburn)
+ 
+#Convert the model matrix into a data frame
+sunburndummies.frame <- data.frame(sunburndummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, sunburndummies.frame)
+ 
+#create a matrix for bc checked
+bccheckeddummies.matrx <- model.matrix(~nhanescleansed$bc_checked)
+ 
+#Convert the model matrix into a data frame
+bccheckeddummies.frame <- data.frame(bccheckeddummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, bccheckeddummies.frame)
+ 
+#create a matrix for smoking
+smokingdummies.matrx <- model.matrix(~nhanescleansed$smoking)
+ 
+#Convert the model matrix into a data frame
+smokingdummies.frame <- data.frame(smokingdummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, smokingdummies.frame)
+ 
+#create a matrix for chest pain walk fast
+overweightdummies.matrx <- model.matrix(~nhanescleansed$overweight)
+ 
+#Convert the model matrix into a data frame
+overweightdummies.frame <- data.frame(overweightdummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, overweightdummies.frame)
+ 
+#create a matrix for chest pain walk fast
+chestpainnormaldummies.matrx <- model.matrix(~nhanescleansed$chest_pain_normal_pace)
+ 
+#Convert the model matrix into a data frame
+chestpainnormaldummies.frame <- data.frame(chestpainnormaldummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, chestpainnormaldummies.frame)
+ 
+#create a matrix for chest pain walk fast
+chestpainfastdummies.matrx <- model.matrix(~nhanescleansed$chest_pain_walk_fast)
+ 
+#Convert the model matrix into a data frame
+chestpainfastdummies.frame <- data.frame(chestpainfastdummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, chestpainfastdummies.frame)
+ 
+#create a matrix for chest pain
+chestpaindummies.matrx <- model.matrix(~nhanescleansed$chest_pain)
+ 
+#Convert the model matrix into a data frame
+chestpaindummies.frame <- data.frame(chestpaindummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, chestpaindummies.frame)
+ 
+#create a matrix for hypertension
+hypertensiondummies.matrx <- model.matrix(~nhanescleansed$hypertension)
+ 
+#Convert the model matrix into a data frame
+hypertensiondummies.frame <- data.frame(hypertensiondummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, hypertensiondummies.frame)
+ 
+#create a matrix for gluten_free
+gluten_freedummies.matrx <- model.matrix(~nhanescleansed$gluten_free)
+ 
+#Convert the model matrix into a data frame
+gluten_freedummies.frame <- data.frame(gluten_freedummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, gluten_freedummies.frame)
+ 
+#create a matrix for stroke
+strokedummies.matrx <- model.matrix(~nhanescleansed$stroke)
+ 
+#Convert the model matrix into a data frame
+strokedummies.frame <- data.frame(strokedummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, strokedummies.frame)
+ 
+#create a matrix for diabetes_relatives
+diabetesrelativesdummies.matrx <- model.matrix(~nhanescleansed$diabetes_relatives)
+ 
+#Convert the model matrix into a data frame
+diabetesrelativesdummies.frame <- data.frame(diabetesrelativesdummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, diabetesrelativesdummies.frame)
+ 
+#create a matrix for diabetes
+diabetesdummies.matrx <- model.matrix(~nhanescleansed$diabetes)
+ 
+#Convert the model matrix into a data frame
+diabetesdummies.frame <- data.frame(diabetesdummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, diabetesdummies.frame)
+ 
+#create a matrix for feel_at_risk_diabetes
+feel_at_risk_diabetesdummies.matrx <- model.matrix(~nhanescleansed$feel_at_risk_diabetes)
+ 
+#Convert the model matrix into a data frame
+feel_at_risk_diabetesdummies.frame <- data.frame(feel_at_risk_diabetesdummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, feel_at_risk_diabetesdummies.frame)
+ 
+#create a matrix for gender
+genderdummies.matrx <- model.matrix(~nhanescleansed$gender)
+ 
+#Convert the model matrix into a data frame
+genderdummies.frame <- data.frame(genderdummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, genderdummies.frame)
+ 
+#create a matrix for ethnicity
+ethnicitydummies.matrx <- model.matrix(~nhanescleansed$ethnicity)
+ 
+#Convert the model matrix into a data frame
+ethnicitydummies.frame <- data.frame(ethnicitydummies.matrx)
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, ethnicitydummies.frame)
+ 
+#create a matrix for education_level
+education_leveldummies.matrx <- model.matrix(~nhanescleansed$education_level)
+ 
+#Convert the model matrix into a data frame
+education_leveldummies.frame <- data.frame(education_leveldummies.matrx )
+ 
+#bind the data frame to the data set
+nhanescleansed <- cbind(nhanescleansed, education_leveldummies.frame)
+```
+
+
+ 
+# selecting and renaming variables
+# removing height and weight
+```{r}
+library(dplyr)
+nhanesselected <- nhanescleansed %>%
+  select(diabetes_risk = diabetes_risk
+          , sunburnYes = nhanescleansed.sunburn1
+          , annual_income0to5 = nhanescleansed.annual_income1
+         , annual_income5to10 = nhanescleansed.annual_income2
+         , annual_income10to15 = nhanescleansed.annual_income3
+         , annual_income15to20 = nhanescleansed.annual_income4
+         , annual_income20to25 = nhanescleansed.annual_income5
+         , annual_income25to35 = nhanescleansed.annual_income6
+         , annual_income35to45 = nhanescleansed.annual_income7
+         , annual_income45to55 = nhanescleansed.annual_income8
+         , annual_income55to65 = nhanescleansed.annual_income9
+         , annual_income65to75 = nhanescleansed.annual_income10
+         , annual_income20plus = nhanescleansed.annual_income12
+         , annual_incomeunder20 = nhanescleansed.annual_income13
+         , annual_income75to100 = nhanescleansed.annual_income14
+         , bccheckedlessthan1yr = nhanescleansed.bc_checked1
+         , bcchecked1to2yr = nhanescleansed.bc_checked2
+         , bcchecked2to5yr = nhanescleansed.bc_checked3
+         , smokingeveryday = nhanescleansed.smoking1
+         , smokingNo = nhanescleansed.smoking3
+         , chest_painYes = nhanescleansed.chest_pain1
+         , chest_pain_walk_fastYes = nhanescleansed.chest_pain_walk_fast1
+         , chest_pain_walk_fastNo = nhanescleansed.chest_pain_walk_fast2
+         , chest_pain_normalYes = nhanescleansed.chest_pain_normal_pace1
+  , overweightYes = nhanescleansed.overweight1
+  , hypertensionYes = nhanescleansed.hypertension1
+  , glutenfreeYes = nhanescleansed.gluten_free1
+  , strokeYes = nhanescleansed.stroke1
+  , diabetesrelativesYes = nhanescleansed.diabetes_relatives1
+  , diabetesNo = nhanescleansed.diabetes1
+  , feelatriskdiabetesYes = nhanescleansed.feel_at_risk_diabetes1
+  , MexicanAmer = nhanescleansed.ethnicity1
+  , OtherHispanic = nhanescleansed.ethnicity2
+  , NonHispBlack = nhanescleansed.ethnicity4
+  , OtherRace = nhanescleansed.ethnicity5
+  , Lessthangrade1 = nhanescleansed.education_level1
+  , g9to11 = nhanescleansed.education_level2
+  , hsgraduateorged = nhanescleansed.education_level3
+  , somecollegeorAAdegree = nhanescleansed.education_level4
+  , frozen_meals = frozen_meals
+  , age = age
+  , sleep_weekdays = sleep_weekdays
+  , hours_worked = hours_worked
+  , time_outdoors_weekdays = time_outdoors_weekdays
+  , time_outdoors_weekends = time_outdoors_weekends
+  , time_sitting = time_sitting
+  , take_away_food = take_away_food
+  , genderF = nhanescleansed.gender0
+  , vigorous_activity_atwork = vigorous_activity_atwork
+  , vigorous_activity = vigorous_activity
+  , BMI = BMI
+  , bp_age = bp_age
+  , hospital_stays = hospital_stays
+  , last_doctor_visit = last_doctor_visit
+  , time_walking_biking_perday = time_walking_biking_perday
+  , moderate_activity = moderate_activity
+  )
+
+```
+
+ 
+# buid a model with all variables to see what variables from factors are
+# the most significant -- filter out the other factor variables
+```{r}
+logistmodel <- glm(diabetes_risk ~ .
+                   , family = "binomial"
+                   , data=nhanesselected)
+summary(logistmodel)
+```
+```{r}
+nhanesselectedv2 <- nhanescleansed %>%
+  select(diabetes_risk = diabetes_risk
+         , sunburnYes = nhanescleansed.sunburn1
+        
+         #   , annual_income0to5 = nhanescleansed.annual_income1
+         #   , annual_income5to10 = nhanescleansed.annual_income2
+         #   , annual_income10to15 = nhanescleansed.annual_income3
+         #   , annual_income15to20 = nhanescleansed.annual_income4
+         #   , annual_income20to25 = nhanescleansed.annual_income5
+         #   , annual_income25to35 = nhanescleansed.annual_income6
+         #   , annual_income35to45 = nhanescleansed.annual_income7
+         #   , annual_income45to55 = nhanescleansed.annual_income8
+         , annual_income55to65 = nhanescleansed.annual_income9
+         #   , annual_income65to75 = nhanescleansed.annual_income10
+         #   , annual_income20plus = nhanescleansed.annual_income12
+         #   , annual_incomeunder20 = nhanescleansed.annual_income13
+         #   , annual_income75to100 = nhanescleansed.annual_income14
+        
+         , bccheckedlessthan1yr = nhanescleansed.bc_checked1
+         #   , bcchecked1to2yr = nhanescleansed.bc_checked2
+         #   , bcchecked2to5yr = nhanescleansed.bc_checked3
+        
+         , smokingeveryday = nhanescleansed.smoking1
+         #   , smokingNo = nhanescleansed.smoking3
+        
+         , chest_painYes = nhanescleansed.chest_pain1
+        
+         #   , chest_pain_walk_fastYes = nhanescleansed.chest_pain_walk_fast1
+         , chest_pain_walk_fastNo = nhanescleansed.chest_pain_walk_fast2
+        
+         , chest_pain_normalYes = nhanescleansed.chest_pain_normal_pace1
+        
+         , overweightYes = nhanescleansed.overweight1
+        
+         , hypertensionYes = nhanescleansed.hypertension1
+        
+         , glutenfreeYes = nhanescleansed.gluten_free1
+        
+         , strokeYes = nhanescleansed.stroke1
+        
+         , diabetesrelativesYes = nhanescleansed.diabetes_relatives1
+        
+         , diabetesNo = nhanescleansed.diabetes1
+        
+         , feelatriskdiabetesYes = nhanescleansed.feel_at_risk_diabetes1
+        
+         #   , MexicanAmer = nhanescleansed.ethnicity1
+         #   , OtherHispanic = nhanescleansed.ethnicity2
+         , NonHispBlack = nhanescleansed.ethnicity4
+         #   , OtherRace = nhanescleansed.ethnicity5
+        
+         #   , Lessthangrade1 = nhanescleansed.education_level1
+         #   , g9to11 = nhanescleansed.education_level2
+         , hsgraduateorged = nhanescleansed.education_level3
+         #   , somecollegeorAAdegree = nhanescleansed.education_level4
+        
+         , frozen_meals = frozen_meals
+         , age = age
+         , sleep_weekdays = sleep_weekdays
+         , hours_worked = hours_worked
+         , time_outdoors_weekdays = time_outdoors_weekdays
+         , time_outdoors_weekends = time_outdoors_weekends
+         , time_sitting = time_sitting
+         , take_away_food = take_away_food
+        
+         , genderF = nhanescleansed.gender0
+        
+         , vigorous_activity_atwork = vigorous_activity_atwork
+         , vigorous_activity = vigorous_activity
+         , BMI = BMI
+        
+         , bp_age = bp_age
+         , hospital_stays = hospital_stays
+         , last_doctor_visit = last_doctor_visit
+         , time_walking_biking_perday = time_walking_biking_perday
+         , moderate_activity = moderate_activity
+         ,
+  )
+ 
+```
+ 
+#build a model with new dataset
+```{r}
+logistmodel2 <- glm(diabetes_risk ~ .
+                   , family = "binomial"
+                   , data=nhanesselectedv2)
+summary(logistmodel2)
+```
+ 
+# remove insignificant variables and re-run model
+```{r}
+nhanesselectedv3 <- nhanescleansed %>%
+  select(diabetes_risk = diabetes_risk
+     ##    , sunburnYes = nhanescleansed.sunburn1
+        
+         #   , annual_income0to5 = nhanescleansed.annual_income1
+         #   , annual_income5to10 = nhanescleansed.annual_income2
+         #   , annual_income10to15 = nhanescleansed.annual_income3
+         #   , annual_income15to20 = nhanescleansed.annual_income4
+         #   , annual_income20to25 = nhanescleansed.annual_income5
+         #   , annual_income25to35 = nhanescleansed.annual_income6
+         #   , annual_income35to45 = nhanescleansed.annual_income7
+         #   , annual_income45to55 = nhanescleansed.annual_income8
+         , annual_income55to65 = nhanescleansed.annual_income9
+         #   , annual_income65to75 = nhanescleansed.annual_income10
+         #   , annual_income20plus = nhanescleansed.annual_income12
+         #   , annual_incomeunder20 = nhanescleansed.annual_income13
+         #   , annual_income75to100 = nhanescleansed.annual_income14
+        
+      #   , bccheckedlessthan1yr = nhanescleansed.bc_checked1
+         #   , bcchecked1to2yr = nhanescleansed.bc_checked2
+         #   , bcchecked2to5yr = nhanescleansed.bc_checked3
+        
+         , smokingeveryday = nhanescleansed.smoking1
+         #   , smokingNo = nhanescleansed.smoking3
+        
+      #   , chest_painYes = nhanescleansed.chest_pain1
+        
+         #   , chest_pain_walk_fastYes = nhanescleansed.chest_pain_walk_fast1
+         , chest_pain_walk_fastNo = nhanescleansed.chest_pain_walk_fast2
+        
+         , chest_pain_normalYes = nhanescleansed.chest_pain_normal_pace1
+        
+         , overweightYes = nhanescleansed.overweight1
+        
+     #    , hypertensionYes = nhanescleansed.hypertension1
+        
+         , glutenfreeYes = nhanescleansed.gluten_free1
+        
+         , strokeYes = nhanescleansed.stroke1
+        
+         , diabetesrelativesYes = nhanescleansed.diabetes_relatives1
+        
+         , diabetesNo = nhanescleansed.diabetes1
+        
+         , feelatriskdiabetesYes = nhanescleansed.feel_at_risk_diabetes1
+        
+         #   , MexicanAmer = nhanescleansed.ethnicity1
+         #   , OtherHispanic = nhanescleansed.ethnicity2
+         , NonHispBlack = nhanescleansed.ethnicity4
+         #   , OtherRace = nhanescleansed.ethnicity5
+        
+         #   , Lessthangrade1 = nhanescleansed.education_level1
+         #   , g9to11 = nhanescleansed.education_level2
+         , hsgraduateorged = nhanescleansed.education_level3
+         #   , somecollegeorAAdegree = nhanescleansed.education_level4
+        
+         , frozen_meals = frozen_meals
+         , age = age
+    #     , sleep_weekdays = sleep_weekdays
+    #     , hours_worked = hours_worked
+   #      , time_outdoors_weekdays = time_outdoors_weekdays
+    #     , time_outdoors_weekends = time_outdoors_weekends
+     #    , time_sitting = time_sitting
+   #      , take_away_food = take_away_food
+        
+         , genderF = nhanescleansed.gender0
+        
+         , vigorous_activity_atwork = vigorous_activity_atwork
+      #   , vigorous_activity = vigorous_activity
+         , BMI = BMI
+        
+         , bp_age = bp_age
+    #     , hospital_stays = hospital_stays
+         , last_doctor_visit = last_doctor_visit
+    #     , time_walking_biking_perday = time_walking_biking_perday
+    #     , moderate_activity = moderate_activity
+         ,
+  )
+ 
+```
+# build new model
+#### final model for analysis
+```{r}
+logistmodel3 <- glm(diabetes_risk ~ .
+                    , family = "binomial"
+                    , data=nhanesselectedv3)
+summary(logistmodel3)
+ 
+```
+# odds ratios only
+```{r}
+exp(coef(logistmodel3))
+```
+ 
+#run VIF
+```{r}
+VIF(logistmodel3)
+# no multicollinearity
+```
+ 
+#check automatic models
+```{r}
+null = glm(diabetes_risk ~ 1, data=nhanesselectedv3, family = "binomial")
+null
+ 
+full = glm(diabetes_risk ~ ., data=nhanesselectedv3, family = "binomial")
+full
+```
+#Forward Regression
+```{r}
+forwardnhanescleased = step(null, scope = list(lower=null, upper=full), direction="forward")
+summary(forwardnhanescleased)
+ 
+summary(logistmodel3)
+```
+ 
+ 
+#Backward Regression
+```{r}
+backwardnhanescleased = step(full, direction="backward")
+summary(backwardnhanescleased)
+```
+ 
+#Stepwise Regression
+```{r}
+stepnhanescleased = step(null, scope = list(upper=full), direction="both")
+summary(stepnhanescleased)
+```
+
+#######################################################################################################################################################################
+#CCA
+######################################################################################################################################################################
+
+#Assuming that we linearity in our model
+#Assuming that there is no multicollinearity
+#Assuming that we have no normality 
+# We should have relatively equal variance
+#####################################################################################
+####################################################################################
+#Canonical Correlation
+
+#diabetes variables of interest
+```{r}
+library(dplyr)
+diabetesRisk <- nhanes %>%
+  select(diabetes_relatives = diabetes_relatives
+         , diabetes_risk = diabetes_risk
+         , feel_at_risk_diabetes = feel_at_risk_diabetes
+         #, stroke = stroke
+         )
+```
+
+#select activityLevel variables of interest
+```{r}
+activitylevel <- nhanescleansed %>%
+  select(time_walking_biking_perday = time_walking_biking_perday
+         , moderate_activity = moderate_activity
+         , time_outdoors_weekdays = time_outdoors_weekdays
+         , time_outdoors_weekends = time_outdoors_weekends
+         , vigorous_activity = vigorous_activity
+         )%>%
+  mutate(time_walking_biking_perday = scale(time_walking_biking_perday)
+         , moderate_activity = scale(moderate_activity)
+         , time_outdoors_weekdays = scale(time_outdoors_weekdays)
+         , time_outdoors_weekends = scale(time_outdoors_weekends)
+         , vigorous_activity = scale(vigorous_activity))
+```
+
+
+
+#select variables for demographic
+```{r}
+demographic <- nhanes %>%
+  select(height = height
+          , weight = weight
+         , gender = gender
+         , education_level = education_level
+         , ethnicity = ethnicity
+         , age = age, annual_income = annual_income, weight_10yearsago = weight_10yearsago#, hours_worked = hours_worked
+         
+         ) %>%
+  mutate(BMI = scale(weight)/scale(height)
+         , age = scale(age)
+         , annual_income = scale(annual_income)
+         , weight_10yearsago = scale(weight_10yearsago)
+         )
+demographic$height <- NULL
+demographic$weight <- NULL
+```
+
+#select the variables for healthcondition
+```{r}
+healthconditions <- nhanes %>%
+  select(hypertension = hypertension
+         , bc_checked = bc_checked
+         , age = age
+         , smoking = smoking
+         , overweight = overweight
+         , stroke = stroke
+         , chest_pain = chest_pain
+         #, BMI = weight/height
+         )
+```
+
+
+###################################################################
+# Exploring correlations between psychology and academics
+
+
+###################################################################
+# This is a nice function for computing the Wilks lambdas for 
+# CCA data from the CCA library's method
+# It computes the wilkes lambas the degrees of freedom and te 
+# p-values
+###################################################################
+```{r}
+ccaWilks = function(set1, set2, cca)
+{
+  ev = ((1 - cca$cor^2))
+  ev
+  
+  n = dim(set1)[1]
+  p = length(set1)
+  q = length(set2)
+  k = min(p, q)
+  m = n - 3/2 - (p + q)/2
+  m
+  
+  w = rev(cumprod(rev(ev)))
+  
+  # initialize
+  d1 = d2 = f = vector("numeric", k)
+  
+  for (i in 1:k) 
+  {
+    s = sqrt((p^2 * q^2 - 4)/(p^2 + q^2 - 5))
+    si = 1/s
+    d1[i] = p * q
+    d2[i] = m * s - p * q/2 + 1
+    r = (1 - w[i]^si)/w[i]^si
+    f[i] = r * d2[i]/d1[i]
+    p = p - 1
+    q = q - 1
+  }
+  
+  pv = pf(f, d1, d2, lower.tail = FALSE)
+  dmat = cbind(WilksL = w, F = f, df1 = d1, df2 = d2, p = pv)
+}
+```
+
+################################################################
+# using the yacca package
+################################################################
+```{r}
+options(scipen = 0)
+library(yacca)
+c2 = cca(demographic, diabetesRisk)
+
+summary(c2)
+```
+#Helio plot for CV1
+```{r}
+helio.plot(c2
+           , cv=1
+           , x.name="Demographic"
+           , y.name = "Diabetes Risk"
+           #, sub = ""
+           )
+```
+
+#Helio plot for CV2
+```{r}
+helio.plot(c2
+           , cv=2
+           , x.name="Diabetes values"
+           , y.name = "Demographic values"
+           )
+```
+
+##################################################################################################
+#Correspondence analysis
+##################################################################################################
+#select the required varaibles of interest for Correspondence analysis
+```{r}
+nhanescleansedCat <- nhanescleansed %>%
+  select(gender = gender
+         , education_level = education_level
+         , ethnicity = ethnicity
+         , stroke = stroke)
+```
+
+#structure
+```{r}
+str(nhanescleansedCat)
+```
+
+
+
+
+
+
