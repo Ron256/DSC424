@@ -1,0 +1,206 @@
+---
+title: "HomeWorkAssignment3Question3"
+author: "Ronaldlee Ejalu"
+date: "2/21/2021"
+output:
+  word_document: default
+  html_document: default
+---
+
+#Libraries
+```{r}
+library(DescTools)
+library(Hmisc) #Describe Function
+library(psych) #Multiple Functions for Statistics and Multivariate Analysis
+library(GGally) #ggpairs Function
+library(ggplot2) #ggplot2 Functions
+library(vioplot) #Violin Plot Function
+library(corrplot) #Plot Correlations
+library(REdaS) #Bartlett's Test of Sphericity
+library(psych) #PCA/FA functions
+library(factoextra) #PCA Visualizations
+library("FactoMineR") #PCA functions
+library(ade4) #PCA Visualizations
+library(yacca) # CCA
+library(xlsx) # Excel
+```
+
+
+###################################################################
+# This is a nice function for computing the Wilks lambdas for 
+# CCA data from the CCA library's method
+# It computes the wilkes lambas the degrees of freedom and te 
+# p-values
+###################################################################
+```{r}
+ccaWilks = function(set1, set2, cca)
+{
+  ev = ((1 - cca$cor^2))
+  ev
+  
+  n = dim(set1)[1]
+  p = length(set1)
+  q = length(set2)
+  k = min(p, q)
+  m = n - 3/2 - (p + q)/2
+  m
+  
+  w = rev(cumprod(rev(ev)))
+  
+  # initialize
+  d1 = d2 = f = vector("numeric", k)
+  
+  for (i in 1:k) 
+  {
+    s = sqrt((p^2 * q^2 - 4)/(p^2 + q^2 - 5))
+    si = 1/s
+    d1[i] = p * q
+    d2[i] = m * s - p * q/2 + 1
+    r = (1 - w[i]^si)/w[i]^si
+    f[i] = r * d2[i]/d1[i]
+    p = p - 1
+    q = q - 1
+  }
+  
+  pv = pf(f, d1, d2, lower.tail = FALSE)
+  dmat = cbind(WilksL = w, F = f, df1 = d1, df2 = d2, p = pv)
+}
+```
+
+#Set Working Directory
+```{r}
+setwd("C:/Users/rejalu1/OneDrive - Henry Ford Health System/DSC424/HomeWork3")
+```
+
+#Load the data set
+```{r}
+responses <- read.csv(file="../HomeWork3/datasets/responses.csv", header=TRUE, sep=",")
+```
+
+#Check Sample Size and Number of Variables
+```{r}
+dim(responses)
+```
+
+#Show for first 6 rows of data
+```{r}
+head(responses)
+names(responses)
+```
+
+#Check for Missing Values (i.e. NAs)
+#For All Variables
+```{r}
+sum(is.na(responses))
+```
+
+#Listwise Deletion
+```{r}
+responses2 <- na.omit(responses)
+```
+#Check new data has no missing data
+```{r}
+sum(is.na(responses2))
+```
+
+#Show Structure of Dataset
+```{r}
+#str(responses2, list.len=ncol(responses2))
+str(responses2)
+```
+
+#Anything you do to the right of the comma, you are subsettign columns
+#Anything you do to the left of the comma, you are subsetting rows
+```{r}
+responses3 <- responses2[,c(1:73,76,77:107,110:132,134:140,141:144)]
+music <- responses2[,1:19]
+movie <- responses2[,20:31]
+hobbies_interests <- responses2[,32:63]
+phobias <- responses2[,64:73]
+health <- responses2[,76]
+personality_views_opinions <- responses2[,c(77:107,110:132)]
+spending <- responses2[,134:140]
+demographics <- responses2[,141:144]
+```
+
+# Run the CCA model
+```{r}
+options(scipen = 0)
+c2 = cca(hobbies_interests,spending)
+summary(c2)
+```
+
+#FunctionNames
+```{r}
+ls(c2)
+```
+
+#get the degrees of fredom
+#get the chisquare
+```{r}
+c2$chisq
+c2$df
+```
+
+#calculate the chisquare test
+```{r}
+round(pchisq(c2$chisq
+             , c2$df
+             , lower.tail=F
+             )
+      , 3
+      )
+```
+
+# Extra credits Correspndence Analysis
+
+# set to the working directory
+```{r}
+setwd("C:/Users/rejalu1/OneDrive - Henry Ford Health System/DSC424/HomeWork3")
+```
+
+
+# Load the data file
+```{r}
+sport  <- read.xlsx(file="../HomeWork3/datasets/sport.xls"
+                    , sheetIndex=1)
+```
+
+#first 6 rows
+```{r}
+head(sport)
+```
+
+#struture
+```{r}
+str(sport)
+```
+
+#Edit the First column as Rownames of data
+```{r}
+sport.colnames.rownames = sport[,1]
+sport.countries = sport[, -1]
+#sport.countries
+row.names_scales = sport.colnames.rownames
+```
+
+#qa
+```{r}
+row.names(sport)
+```
+
+#convert the data into contigency table
+```{r}
+dtcountries = as.table(as.matrix(sport.countries))
+```
+
+#load the library ca
+```{r}
+library(ca)
+fit = ca(dtcountries)
+plot(fit)
+#fits = ca(row.names_scales)
+#plot(fits)
+```
+
+#
