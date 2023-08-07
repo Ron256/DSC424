@@ -1,0 +1,210 @@
+---
+title: "DSC424Problem2HomeWork4RSyntaxfile"
+author: "Ronaldlee Ejalu"
+date: "3/7/2021"
+output:
+  word_document: default
+  html_document: default
+---
+
+#load the necessary packages
+```{r}
+library(dplyr)
+library(corrplot) # correlation visualization
+library(MASS) #for CV
+library(caTools) # for splitting the data set into training and testing
+```
+
+
+#set the working directory
+```{r}
+setwd("C:/Users/rejalu1/OneDrive - Henry Ford Health System/DSC424/HomeWork4")
+```
+
+#Load the data set
+```{r}
+heartds <- read.csv(file="../HomeWork4/datasets/heart.csv", header=TRUE, sep=",")
+```
+
+#the top 6 rows of this data set
+```{r}
+head(heartds)
+```
+
+#structure of the ds
+```{r}
+str(heartds)
+```
+
+#check if there are any missing values
+```{r}
+sum(is.na(heartds))
+```
+
+#Convert all the variables to numeric
+```{r}
+heartdscleansed <- heartds %>%
+  transmute(age = as.numeric(age)
+        , sex = as.numeric(sex)
+        , cp = as.numeric(cp)
+        , trestbps = as.numeric(trestbps)
+        , chol = as.numeric(chol)
+        , fbs = as.numeric(fbs)
+        , restecg = as.numeric(restecg)
+        , thalach = as.numeric(thalach)
+        , exang = as.numeric(exang)
+        , oldpeak = oldpeak
+        ,  slope = as.numeric(slope)
+        , ca = as.numeric(ca)
+        , thal = as.numeric(thal)
+        , heartdisease =  as.factor(heartdisease)
+        )
+```
+
+
+#structure of the heartdscleansed data set
+```{r}
+str(heartdscleansed)
+```
+
+#determine how heartdisease is split
+```{r}
+tabulate(heartds$heartdisease)
+```
+
+
+
+#Run the correlation matrix and check for VIF
+```{r}
+#m <- cor(heartdscleansedss)
+#round(m, 2)
+#m <- cor(heartdscleansedss, use='pairwise.complete.obs')
+#round(m,2)
+# M <- cor(heartdscleansedss)
+# m <- corrplot(M, method="ellipse")
+# m
+# m <- corrplot(M, method="number")
+# m
+# model <- lm(heartdisease ~., data = heartds)
+# VIF(model)
+```
+
+#########################################################################################################################################
+#Running LDA with cross-validation
+########################################################################################################################################
+
+#The depedent variable must be categorical
+```{r}
+heartLDA <- lda(heartdisease ~., data = heartdscleansed)
+#heartLDA
+```   
+
+#plotting the model
+#we have to create a new without cross validation
+```{r}
+#heartdiseaseLDA <- lda(heartdisease ~., data=heartdscleansed)
+#heartdiseaseLDA
+#plot(heartdiseaseLDA, xlab = "LDA1", ylab = "LDA2")
+```
+
+# Try to predict the class from the original data
+# Note ... this is JUST a test to see how this works
+# In practice you will want to use cross-validation!
+```{r}
+p <- predict(heartLDA, newdata=heartdscleansed[,1:13])$class
+p
+```
+
+
+#Compare the results of the prediction
+```{r}
+t <- table(p, heartdscleansed$heartdisease)
+t
+```
+
+#determine the accuracy
+```{r}
+acc <- mean(p==heartdscleansed$heartdisease)
+acc
+```
+
+
+
+################################################################################################################################################
+#splitting the data set into training and testing
+################################################################################################################################################
+
+#you're going to do a set seed, because every set seed will give you a different randomization 
+#So if you want to have the same exact.
+#If you want to know exactly where you got that randomization from, you want to set the seed  to the same number
+```{r}
+set.seed(123)
+```
+#put in sample split the original data set in this case we're going to do a 7030 split 
+#so 70% is going into training 
+#and 30% is going into testing.
+```{r}
+sample <- sample.split(heartdscleansed, SplitRatio = 0.70)#Splits the data in the ratio mentioned in the SplitRatio
+train <- subset(heartdscleansed, sample==TRUE)
+test <- subset(heartdscleansed, sample==FALSE)
+```
+
+#The depedent variable must be categorial (Assuming No Cross-Validation)
+```{r}
+heartLDA <- lda(heartdisease ~., data = train)
+heartLDA
+#plot(heartLDA)
+#ls(heartLDA)
+```
+#we can predict on the training
+```{r}
+p <- predict(heartLDA, newdata = heartdscleansed[,1:13])$class
+p
+```
+
+#we can use the table to get the same confusion matrix 
+```{r}
+t1 <- table(p, heartdscleansed$heartdisease)
+t1
+```
+
+#calculate the accuracy by using the mean
+```{r}
+acc1 <- mean(p==heartdscleansed$heartdisease)
+acc1
+```
+#We can also do as we said before the Cross validation come up with the table, 
+#and if we use coefficients remember if we do Ls.
+# Setting "CV = T" will have the lda function perform
+# "Leave-one-out" cross-validation
+```{r}
+heartLDA2 <- lda(heartdisease ~., data=heartdscleansed, CV=T)
+heartLDA2
+```
+
+#use the table() to get a confusion matrix by using the class
+```{r}
+t2 <- table(heartLDA2$class, heartdscleansed$heartdisease)
+t2
+```
+
+#calculate the accuracy by hand
+```{r}
+accuracy <- (373 + 476)/(373 + 476 + 126 + 50)
+accuracy
+```
+
+#Coming up with the different performance metrics
+#build a model with a train()
+```{r}
+library(caret)
+heartModelFit <- train(heartdisease ~., method = "lda", preProcess=c("scale","center"), data=train)
+```
+#And then predict this data on the training data and come up with a confusion matrix.
+```{r}
+p <- predict(heartModelFit, train)
+cm <- confusionMatrix(train$heartdisease, p, dnn=c("Actual Group", "Predicted Group"))
+cm
+```
+
+
