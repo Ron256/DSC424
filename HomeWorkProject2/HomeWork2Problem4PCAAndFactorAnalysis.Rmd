@@ -1,0 +1,540 @@
+---
+title: "Problem4PCA"
+author: "Ronaldlee Ejalu"
+date: "1/29/2021"
+output:
+  word_document: default
+  html_document: default
+---
+
+#HomeWork2 Problem4:  Principal Component Analysis (PCA) and Factor Analysis in R
+
+#Using 5-point liked items taken from the Big Five 
+#Personality Test web-based personality assessment
+
+#Note: Run Shortcut:  CTRL+Enter
+
+#Libraries
+```{r}
+library(DescTools)
+library(Hmisc) #Describe Function
+library(psych) #Multiple Functions for Statistics and Multivariate Analysis
+library(GGally) #ggpairs Function
+library(ggplot2) #ggplot2 Functions
+library(vioplot) #Violin Plot Function
+library(corrplot) #Plot Correlations
+library(REdaS) #Bartlett's Test of Sphericity
+library(psych) #PCA/FA functions
+library(factoextra) #PCA Visualizations
+library("FactoMineR") #PCA functions
+library(ade4) #PCA Visualizations
+```
+
+
+
+# Load the data set
+```{r}
+BIG5 <- read.csv("C:/Users/rejalu1/OneDrive - Henry Ford Health System/DSC424/Data Sets/BIG5.csv")
+```
+
+
+#Make a copy of the data set
+```{r}
+likeditems <- BIG5
+```
+
+#Check the Sample Size and the Number of variables
+```{r}
+dim(likeditems)
+```
+
+#Show the first 6 rows of the data
+```{r}
+head(likeditems)
+```
+
+#Show the column headers or variable names
+```{r}
+names(likeditems)
+```
+
+#Check for missing values (i.e NAs)
+```{r}
+sum(is.na(likeditems))
+```
+
+# display the structure of the data set
+# list.len - defines the maximum nuber of list elements to display within a level.
+```{r}
+str(likeditems, list.len=ncol(likeditems))
+```
+
+# Show descriptive statistics
+# Since our sample is more than 3000
+# I created a list of the JarqueBeraTest results
+# ran the test for the first 10 variables, which were not normally distributed. 
+```{r}
+oshap <- lapply(likeditems, JarqueBeraTest)
+oshap[[10]]
+```
+
+```{r}
+describe(likeditems$E1)
+summary(likeditems$E1)
+```
+
+# drawing a histogram for the E1 will show you 
+# there are some outliers outside of Q1-1.5*IQR 
+# for the variable E1 (I am the life of the party)
+```{r}
+histogram(likeditems$E1)
+```
+
+#histogram for E2
+```{r}
+histogram(likeditems$E2)
+```
+
+# Explanatory graphing Analysis
+```{r}
+p1 <- ggpairs(likeditems[,1:10])
+p1
+```
+
+#Check for Multicollineaity
+# This show that there multicollinearity between N8 and N7
+```{r}
+M <- cor(likeditems, method="spearman")
+#M
+options(scipen=999) # removing off scientific notation
+round(M,2)
+```
+
+```{r}
+corrplot(cor(M, method="spearman"), method = "number", type = "lower")
+```
+
+
+
+#GGplot to plot different correlation matrix plot
+# High correlation between N8 and N7
+```{r}
+ggcorr(likeditems[,1:10], method = c("pairwise", "spearman"), label=TRUE)
+ggcorr(likeditems[,10:20], method = c("pairwise", "spearman"), label=TRUE)
+ggcorr(likeditems[,20:30], method = c("pairwise", "spearman"), label=TRUE)
+ggcorr(likeditems[,30:40], method = c("pairwise", "spearman"), label=TRUE)
+ggcorr(likeditems[,40:49], method = c("pairwise", "spearman"), label=TRUE)
+```
+
+
+#let's remove the variable N8 from the dataset
+```{r}
+likeditems$N8 <- NULL
+```
+
+
+# Run a correlation test to see how correlated the variables are.  
+# Which correlations are significant
+```{r}
+options("scipen"=100, "digits"=5)
+```
+
+#  if these P values, 
+# so I ran a correlation test, took out the p values 
+# and around them off two decimal places 
+```{r}
+round(cor(likeditems), 2)
+MCorTest = corr.test(likeditems, adjust = "none")
+MCorTest
+#ls(MCorTest)
+M = MCorTest$p
+round(M,2)
+
+# Now, for each element, see if it is < .01 (or whatever significance) #and set the entry to  true = significant or else false
+# if these P values are less than point 01 set to true,
+# if it's not set it to false 
+# and then we'll see a certain amount of here that are.
+MTest = ifelse(M < .01, T, F)
+MTest
+
+# Now lets see how many significant correlations there are for each variable.  We can do
+# this by summing the columns of the matrix
+# if we sum these counts up and subtract from once we take off 
+# diagonal If you recall, will see that
+
+colSums(MTest) - 1  # We have to subtract 1 for the diagonal elements (self-correlation)
+```
+
+
+# PCA_Plot functions
+```{r}
+
+PCA_Plot = function(pcaData)
+{
+  library(ggplot2)
+  
+  theta = seq(0,2*pi,length.out = 100)
+  circle = data.frame(x = cos(theta), y = sin(theta))
+  p = ggplot(circle,aes(x,y)) + geom_path()
+  
+  loadings = data.frame(pcaData$rotation, .names = row.names(pcaData$rotation))
+  p + geom_text(data=loadings, mapping=aes(x = PC1, y = PC2, label = .names, colour = .names, fontface="bold")) +
+    coord_fixed(ratio=1) + labs(x = "PC1", y = "PC2")
+}
+
+PCA_Plot_Secondary = function(pcaData)
+{
+  library(ggplot2)
+  
+  theta = seq(0,2*pi,length.out = 100)
+  circle = data.frame(x = cos(theta), y = sin(theta))
+  p = ggplot(circle,aes(x,y)) + geom_path()
+  
+  loadings = data.frame(pcaData$rotation, .names = row.names(pcaData$rotation))
+  p + geom_text(data=loadings, mapping=aes(x = PC3, y = PC4, label = .names, colour = .names, fontface="bold")) +
+    coord_fixed(ratio=1) + labs(x = "PC3", y = "PC4")
+}
+
+PCA_Plot_Psyc = function(pcaData)
+{
+  library(ggplot2)
+  
+  theta = seq(0,2*pi,length.out = 100)
+  circle = data.frame(x = cos(theta), y = sin(theta))
+  p = ggplot(circle,aes(x,y)) + geom_path()
+  
+  loadings = as.data.frame(unclass(pcaData$loadings))
+  s = rep(0, ncol(loadings))
+  for (i in 1:ncol(loadings))
+  {
+    s[i] = 0
+    for (j in 1:nrow(loadings))
+      s[i] = s[i] + loadings[j, i]^2
+    s[i] = sqrt(s[i])
+  }
+  
+  for (i in 1:ncol(loadings))
+    loadings[, i] = loadings[, i] / s[i]
+  
+  loadings$.names = row.names(loadings)
+  
+  p + geom_text(data=loadings, mapping=aes(x = PC1, y = PC2, label = .names, colour = .names, fontface="bold")) +
+    coord_fixed(ratio=1) + labs(x = "PC1", y = "PC2")
+}
+
+PCA_Plot_Psyc_Secondary = function(pcaData)
+{
+  library(ggplot2)
+  
+  theta = seq(0,2*pi,length.out = 100)
+  circle = data.frame(x = cos(theta), y = sin(theta))
+  p = ggplot(circle,aes(x,y)) + geom_path()
+  
+  loadings = as.data.frame(unclass(pcaData$loadings))
+  s = rep(0, ncol(loadings))
+  for (i in 1:ncol(loadings))
+  {
+    s[i] = 0
+    for (j in 1:nrow(loadings))
+      s[i] = s[i] + loadings[j, i]^2
+    s[i] = sqrt(s[i])
+  }
+  
+  for (i in 1:ncol(loadings))
+    loadings[, i] = loadings[, i] / s[i]
+  
+  loadings$.names = row.names(loadings)
+  
+  print(loadings)
+  p + geom_text(data=loadings, mapping=aes(x = PC3, y = PC4, label = .names, colour = .names, fontface="bold")) +
+    coord_fixed(ratio=1) + labs(x = "PC3", y = "PC4")
+}
+
+```
+
+# PCA/FA
+# Test KMO Sampling Adequancy
+```{r}
+library(psych)
+KMO(likeditems)
+# Overall MSA = 0.91
+# These are similar to intercorrelations
+```
+
+# Test Bartlett's test of Sphericity
+```{r}
+library(REdaS)
+bart_spher(likeditems)
+# p-value < 2.22e-16 (very small number)
+#This is showing that the alternative is true that there are a lot of #differences or enough shared variance that we should be able to test this. 
+```
+
+#Test for Reliability Analysis using Cronbach's Alpha
+# This shows how reliable is this data to each other
+```{r}
+library(psych)
+alpha(likeditems, check.keys = TRUE)
+#raw_alpha 0.88
+```
+
+
+#Parallel Analysis (Horn's parallel analysis)
+
+#Created a Psychologist John L. Horn in 1965
+
+#Closest to Heuristic Determination of Number of Components or Factors
+
+#Compares actual eigenvalues with ones from a Monto-Carlo simulated dataset of
+#the same size
+
+#Dependent upon sample size, correlation coefficient, and how items fall on 
+#components
+```{r}
+library(psych)
+comp <- fa.parallel(likeditems)
+```
+
+#Create PCA
+# we want to center to zero because some of the items might be scalled differently
+# we also want to standardize the original data set. 
+# On this data set What this means is when we go later on using the principal function 
+# to get the scores that those scores are going to be standardized 
+# because we're standardizing the original data set to create the principal component analysis.
+```{r}
+p = prcomp(likeditems, center = T, scale = T)
+p
+
+# Check the scree plot
+plot(p, main="Scree plot", xlab="PC")
+#when we use the abline() one zero that's creating a horizontal line at #one, and so, if we looked at this , we can look at nine or 10 components and so.
+abline(1,0)
+```
+
+# Check the PCA summary function
+# for the cummulative proportional variances of the different pcs.
+```{r}
+summary(p)
+```
+
+#########################################################
+
+# The Psych package has a wonderful PCA function that allows many more options
+# including build-in factor rotation, specifiying a number of factors to include 
+# and automatic "score" generation
+
+#Best Way to Conduct PCA Analysis
+# Since there are cross loading at 0.43,
+#increased the cutoff point to 0.436
+```{r}
+p2 = psych::principal(likeditems, rotate="varimax", nfactors=4, scores=TRUE)
+print(p2$loadings, cutoff=.436, sort=T)
+```
+
+#Removing all the irrelevant variables
+```{r}
+likeditemsWithReducedVars <- likeditems
+likeditemsWithReducedVars$N4 <- NULL
+likeditemsWithReducedVars$A1 <- NULL
+likeditemsWithReducedVars$A6 <- NULL
+likeditemsWithReducedVars$A8 <- NULL
+likeditemsWithReducedVars$C3 <- NULL
+likeditemsWithReducedVars$O9 <- NULL
+```
+
+#Running PCA again after removing the irrelevant variables
+```{r}
+p3 = psych::principal(likeditemsWithReducedVars, rotate="varimax", nfactors=4, scores=TRUE)
+print(p3$loadings, cutoff=.4, sort=T)
+```
+
+# PCAS Other useful available information
+```{r}
+ls(p3)
+```
+
+# Show the eigen values
+```{r}
+p3$values
+```
+#This tells me automatically that there are 7 components with eigen values greater than 1
+```{r}
+table(p3$values > 1)
+```
+
+#Shows the shared variances amongst the variables
+```{r}
+p3$communality
+```
+# Shows the rotation matrix used to take the data from being correlated to making it uncorrelated
+```{r}
+p3$rot.mat
+```
+#Calculating scores
+# Using the score function that the principal component analysis has so in that regard, if we do p3$scores,
+# because we use the principal function out of sight and create a temporary variable called scores, 
+# were we now have all scores for each of the four components for each
+```{r}
+scores <- p3$scores
+```
+
+#what we want to do here is we ultimately want to see 
+#are these components really interdependent on each other or 
+#are they collinear dependent on each other, 
+#so the way that we can check that is by doing the correlation of the scores, and because I used.
+```{r}
+cor(scores)
+```
+# by doing this we feel confident that these components
+# are not sharing information
+# And then end up using them in a linear regression we'd be confident that we no longer have any multicollinearity 
+# like we would, if we tried to put those individual variables that we use as inputs for the principal component analysis 
+# separately in as as a linear regression.
+
+
+# The minimum score for component 1 is 3.5 standard deviation below the mean
+# The maximum score for component 1 is 2.7 standard deviation above the mean
+```{r}
+scores_1 <- scores[,1]
+min_score <- min(scores_1)
+min_score
+
+max_score <- max(scores_1)
+max_score
+```
+
+# five number summary for your scores from component 1
+```{r}
+summary(scores_1)
+```
+################################################################################
+# Calculate the scores for component 2
+# Use scores_2 to show the five number summary for the scores from component 2
+```{r}
+scores_2 <- scores[,2]
+summary(scores_2)
+```
+# The minimum score for component 2 is 4.4 standard deviation below the mean
+# The maximum score for component 2 is 2.8 standard deviation above the mean
+################################################################################
+
+#Calculate the scores for component 3
+#Use scores_3 to show the five number summary for the scores from component 3
+```{r}
+scores_3 <- scores[,3]
+summary(scores_3)
+```
+# The minimum score for component 3 is 4.1 standard deviation below the mean
+# The maximum score for component 3 is 3.0 standard deviation above the mean
+################################################################################
+
+#Calculate the scores for component 3
+#Use scores_4 to show the five number summary for the scores from component 4
+```{r}
+scores_4 <- scores[,4]
+summary(scores_4)
+```
+# The minimum score for component 4 is 4.3 standard deviation below the mean
+# The maximum score for component 4 is 2.3 standard deviation above the mean
+
+#Summary of the overall scores
+```{r}
+summary(scores)
+```
+
+# Conducting factor analysis
+```{r}
+fit = factanal(likeditems, 4)
+print(fit$loadings, cuttoff=0.4, sort=T)
+```
+
+#Using Factorextra
+```{r}
+library(factoextra)
+
+p3 <- prcomp(likeditemsWithReducedVars, scale = TRUE)
+fviz_eig(p3)
+```
+
+#PCA Individuals
+```{r}
+pI<-fviz_pca_ind(p3,
+                 col.ind = "cos2", # Color by the quality of representation
+                 gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+                 repel = TRUE     # Avoid text overlapping
+)
+pI
+```
+
+#PCA Variables
+```{r}
+pca_var<-fviz_pca_var(p3,
+                      col.var = "contrib", # Color by contributions to the PC
+                      gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+                      repel = TRUE     # Avoid text overlapping
+)
+
+pca_var
+
+```
+#Biplot
+```{r}
+bi_plot<-fviz_pca_biplot(p3, repel = TRUE,
+                         col.var = "#2E9FDF", # Variables color
+                         col.ind = "#696969"  # Individuals color
+)
+bi_plot
+```
+
+#IF graph is set to true, it will provide the individual and variable maps
+```{r}
+p4 <- PCA(likeditemsWithReducedVars, graph = FALSE)
+#Shows all the objects or functions available in PCA
+print(p4)
+```
+#Options for providing screeplot
+```{r}
+fviz_eig(p4, addlabels = TRUE, ylim = c(0, 35))
+fviz_screeplot(p4, addlabels = TRUE, ylim = c(0, 35))
+```
+#Which variables contibute the most to the PCs?
+#there are ll variables
+```{r}
+variables <- get_pca_var(p4)
+head(variables$contrib, 11)
+
+library("corrplot")
+corrplot(variables$contrib, is.corr=FALSE)   
+```
+# Contributions of variables to PC1
+```{r}
+fviz_contrib(p4, choice = "var", axes = 1, top = 10)
+# Contributions of variables to PC2
+fviz_contrib(p4, choice = "var", axes = 2, top = 10)
+# Contributions of variables to PC3
+fviz_contrib(p4, choice = "var", axes = 3, top = 10)
+# Contributions of variables to PC4
+fviz_contrib(p4, choice = "var", axes = 4, top = 10)
+```
+
+#Scree plot visualization with the number of
+#components kept in teh result
+```{r}
+library(ade4)
+p5 <- dudi.pca(likeditemsWithReducedVars,
+               scannf = FALSE,   # Hide scree plot
+               nf = 3          # Number of components kept in the results
+)
+fviz_screeplot(p5, addlabels = TRUE, ylim = c(0, 35))
+
+variables2 <- get_pca_var(p5)
+```
+
+#Which variables contibute the most to the PCs?
+#there are ll variables
+```{r}
+head(variables2$contrib, 11)
+
+library("corrplot")
+corrplot(variables2$contrib, is.corr=FALSE)  
+```
+
