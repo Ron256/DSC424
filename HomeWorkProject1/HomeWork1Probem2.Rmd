@@ -1,0 +1,94 @@
+---
+title: "HomeWork1Problem2"
+author: "Ronaldlee Ejalu"
+date: "1/6/2021"
+output:
+  word_document: default
+  html_document: default
+---
+
+# definning the different matrices and vectors 
+# of problem2
+```{r}
+Z = matrix(c(1, -1, 1, 2, 1, -2, 1, 0), nrow = 4, ncol = 2, byrow = T)
+Z
+Y = matrix(c(0, 5, 0, 8), nrow = 4, ncol = 1)
+Y
+M = matrix(c(11, 5, 0, 25, 20, 5, 0, 15, 11), nrow = 3, ncol = 3, byrow = T)
+M
+N = matrix(c(-11, -5, 0, 0, 11, 5, 11, 11, -11), nrow = 3, ncol = 3, byrow = T)
+N
+v = matrix(c(-6, 0, 8), nrow = 3, ncol = 1)
+v
+w = matrix(c(3, 1, 0), nrow = 3, ncol = 1)
+w
+```
+
+
+#(a)v.w (dot product)
+```{r}
+dotproduct = v * w
+dotproduct
+```
+
+#(b)-3*w
+```{r}
+b = -3 * w
+b
+```
+
+#(c)M * v
+```{r}
+Mv = M %*% v
+Mv
+```
+
+#(d) M + N
+```{r}
+sum = M + N
+sum
+```
+
+#(e) M - N
+```{r}
+diff = M - N
+diff
+```
+
+#(f)Z^T z
+```{r}
+result = t(Z) %*% Z
+result
+```
+
+#(g) Compute beta = (Z^T * Z)^-1
+```{r}
+beta = solve(t(Z) %*% Z)
+beta
+```
+
+
+#(h) tranpose of Z * Y
+```{r}
+result = t(Z) %*% Y
+result
+```
+
+#(i) Compute Beta = (Z^T * Z)^-1 * Z^T * Y
+```{r}
+beta2 = solve((t(Z) %*% Z)) %*% t(Z) %*% Y
+beta2
+```
+
+#(j) compute det(Z^T * Z)
+```{r}
+determ = det(t(Z) %*% Z)
+determ
+```
+
+
+
+
+
+
+

@@ -1,0 +1,358 @@
+---
+title: "DSC424HomeWork1"
+author: "Ronaldlee Ejalu"
+StudentID: 2020637
+date: "1/15/2021"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+# Load all the necessary libraries 
+```{r}
+library(readr)
+library(tidyverse)
+library(gtsummary)
+library(tableone)
+library(broom)
+library(dplyr) #dplryr calculations
+library(corrplot) # Plot Correlations
+library(DescTools) # VIF Function
+```
+
+
+# Read data into R studio
+```{r}
+insurance_dataset <- read_csv("C:\\Users\\rejalu1\\OneDrive - Henry Ford Health System\\DSC424\\Data Sets\\insurance_dataset.csv")
+```
+
+#view the 10 data observations
+```{r}
+head(insurance_dataset)
+```
+
+#view the last 10 data observations
+```{r}
+tail(insurance_dataset)
+```
+
+#data structure
+```{r}
+str(insurance_dataset)
+```
+
+# summarized statistical data from the data set
+```{r}
+summary(insurance_dataset)
+```
+
+#check for any missing value
+#There are no missing values
+```{r}
+sum(is.na(insurance_dataset))
+```
+
+#get specific column index in R
+```{r}
+as.data.frame(colnames(insurance_dataset))
+```
+
+
+
+#distinct values of each factor column
+# gender_num, smoker_num, region_num
+```{r}
+insurance_dataset.sex <- count(distinct(insurance_dataset), sex)
+insurance_dataset.sex
+
+insurance_dataset.smoker <- count(distinct(insurance_dataset), smoker)
+insurance_dataset.smoker
+
+insurance_dataset.region <- count(distinct(insurance_dataset), region)
+insurance_dataset.region
+```
+
+
+# data cleaning
+```{r}
+insurance.clean <- insurance_dataset %>%
+  transmute(age = age
+            , sex = as.factor(sex)
+            , gender_num = gender_num
+            , bmi = bmi
+            , children = children
+            , smoker = as.factor(smoker)
+            , smoker_num = smoker_num
+            , region = as.factor(region)
+            , region_num = region_num
+            , expenses = expenses) %>%
+  mutate(
+    sex = relevel(sex, ref = 'male')
+    , smoker = relevel(smoker, ref = 'no')
+    , region = relevel(region, ref = 'southeast')
+  )
+
+# Create a matrix for sex
+sexdummies.matrix <- model.matrix(~insurance.clean$sex)
+
+# Convert the model matrix into a data frame
+sexdummies.frame <- data.frame(sexdummies.matrix)
+
+# bind the data frame to data set
+insurance.clean <- cbind(insurance.clean, sexdummies.frame)
+
+# create a matrix for smoker
+smokerdummies.matrix <- model.matrix(~insurance.clean$smoker)
+
+#Convert the model matrix into a data frame
+smokerdummies.frame <- data.frame(smokerdummies.matrix)
+
+#bind the data frame to data set
+insurance.clean <- cbind(insurance.clean, smokerdummies.frame)
+
+# create a matrix for region
+regiondummies.matrix <- model.matrix(~insurance.clean$region)
+
+# Convert the model matrix into a data frame
+regiondummies.frame <- data.frame(regiondummies.matrix)
+
+# bind the data frame to a data set
+insurance.clean <- cbind(insurance.clean, regiondummies.frame)
+```
+
+# rename and select all the variables interest
+```{r}
+insurancecleansed <- insurance.clean %>%
+  select(age = age
+            , gender_num = gender_num
+            , bmi = bmi
+            , children = children
+            , smoker_num = smoker_num
+            , region_num = region_num
+            , expenses = expenses
+            , sexfemale = insurance.clean.sexfemale
+            , smokeryes = insurance.clean.smokeryes
+            , northeast = insurance.clean.regionnortheast
+            , northwest = insurance.clean.regionnorthwest
+            , southwest = insurance.clean.regionsouthwest)
+```
+
+#extract out all numerical variables
+```{r}
+insurance.numvariables <- insurance_dataset[,c(1,4:5,10)]
+```
+
+# check for multicollinearity amongst the numerical variables
+```{r}
+M <- cor(insurance.numvariables, method = "spearman")
+M
+corrplot(M, method = "number")
+```
+
+
+
+# Check for multicollinearity amongst all the variables
+```{r}
+m2 <- cor(insurancecleansed, method = "spearman")
+corrplot(m2, method = "number")
+
+```
+
+#Altering my data set after sensing multicollinearity in the original data
+# I select the variables of interest 
+```{r}
+insurancewithselectedvars <- insurancecleansed %>%
+  select(age = age
+            , bmi = bmi
+            , children = children
+            , expenses = expenses
+            , sexfemale = sexfemale
+            , smokeryes = smokeryes
+            , northeast = northeast
+            , northwest = northwest
+            , southwest = southwest)
+```
+
+# Again check for multicollinearity
+```{r}
+#summary(insurancewithselectedvars)
+m3 <- cor(insurancewithselectedvars, method = "spearman")
+#m3
+corrplot(m3, method = "number")
+
+model2 <- lm(expenses ~ ., data = insurancewithselectedvars)
+summary(model2)
+VIF(model2)
+```
+
+# Explanatory analysis
+
+#Histogram
+```{r}
+hist(insurancewithselectedvars$expenses, col="yellow", freq=TRUE)
+x <- seq(0, 60000, length.out = 50)
+y <- with(insurancewithselectedvars, dnorm(x, mean(expenses), sd(expenses)))
+lines(x, y, col="red")
+```
+
+
+# Five - Number Summary for the Boxplot
+```{r}
+summary(insurancewithselectedvars$expenses)
+
+# Boxplots
+insuranxebloxplot <-ggplot(insurancewithselectedvars, aes(y=expenses)) +
+  geom_boxplot(col="blue") +
+  labs(
+    title="expenses",
+    y="expenses")
+insuranxebloxplot
+
+ggsave("insuranxebloxplot.png")
+```
+
+# Return a vector with a mean value across each row of the insurance.numvariables data set
+```{r}
+insurance.numvariables.means <- rowMeans(insurance.numvariables, na.rm=TRUE)
+hist(insurance.numvariables.means)
+```
+
+#remove entries with the means greater than 5000
+```{r}
+insurance.keep <- insurance.numvariables.means < 5000
+```
+
+# remove outliers from the original data frame
+```{r}
+insuracedataset <- insurance_dataset[insurance.keep,]
+```
+
+# remove outliers from the numerical insurance data set
+```{r}
+insurance.numvariables.withoutliers <- insurance.numvariables[insurance.keep,]
+```
+
+#remove outliers from the insurance with selected vars data set
+```{r}
+insurancewithselectedvars.withoutliers <- insurancewithselectedvars[insurance.keep, ]
+```
+
+
+
+#plot the means with outliers removed
+```{r}
+insurance.mean2 <- rowMeans(insurance.numvariables.withoutliers, na.rm = TRUE)
+hist(insurance.mean2)
+```
+
+#five number summary
+```{r}
+summary(insurancewithselectedvars.withoutliers$expenses,)
+```
+
+
+#box plot
+```{r}
+boxplot(insurancewithselectedvars.withoutliers$expenses, col = "blue", main = "Expenses", ylab = "expenses")
+```
+
+
+```{r}
+hist(insurancewithselectedvars.withoutliers$expenses, col="yellow", freq=TRUE)
+x <- seq(0, 60000, length.out = 50)
+y <- with(insurancewithselectedvars.withoutliers, dnorm(x, mean(expenses), sd(expenses)))
+lines(x, y, col="red")
+```
+
+# model building after removing the outliers.
+```{r}
+model3 <- lm(expenses ~ ., data = insurancewithselectedvars.withoutliers)
+summary(model3)
+```
+
+
+# Creating the automatic models
+```{r}
+null = lm(expenses ~ 1, data = insurancewithselectedvars.withoutliers)
+null
+
+full = lm(expenses ~ ., data = insurancewithselectedvars.withoutliers)
+
+#Forward regression
+train_forward = step(null, scope = list(lower=null, upper=full),direction="forward")
+summary(train_forward)
+```
+
+# using backward
+```{r}
+train_backward = step(full, dierction="backward")
+summary(train_backward)
+```
+
+# using stepwise Regression
+```{r}
+train_step = step(null, scope = list(upper=full), direction = "both")
+summary(train_step)
+```
+
+
+
+
+# Data Visualization
+plot a box plot
+```{r}
+counts <- table(insuracedataset$smoker)
+counts
+barplot(counts, main="Number Of Observation per smoking status",ylab="Number Of Observations", xlab="Smoking Status", col=c("blue","green"))
+```
+
+# calculate the mean expense by smoking status
+# plot a bar chart
+```{r}
+library(scales)
+plotdata <- insuracedataset %>%
+  group_by(smoker) %>%
+  summarize(mean_expenses = mean(expenses))
+
+#plotdata
+
+# plot the means
+ggplot(plotdata,
+       aes(x = smoker, 
+           y = mean_expenses)) +
+  geom_bar(stat = "identity",
+           fill = "cornflowerblue") +
+  geom_text(aes(label = dollar(mean_expenses)), 
+            vjust = -0.25) +
+  scale_y_continuous(breaks = seq(0, 30000, 2000), 
+                     label = dollar
+                     ) +
+  labs(title = "Mean Insurance expenses by smoking status", 
+       x = "smoking status",
+       y = "mean_expenses")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
